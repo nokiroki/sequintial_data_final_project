@@ -20,16 +20,18 @@ class Conv1dAutoEncoder(pl.LightningModule):
 
     def __init__(
         self,
-        in_channels: int,
-        n_latent_features: int
+        in_channels: int, # without mcc
+        n_latent_features: int,
+        n_embedding: int = 16,
+        n_vocab_size: int = 386
     ):
         super().__init__()
         self.out = n_latent_features
 
-        
+        self.embed = nn.Embedding(n_vocab_size + 1, n_embedding, 0)
 
         self.encoder = nn.Sequential(
-            nn.Conv1d(in_channels=in_channels, out_channels=512, kernel_size=3),
+            nn.Conv1d(in_channels=in_channels + n_embedding, out_channels=512, kernel_size=3),
             nn.Conv1d(in_channels=512, out_channels=256, kernel_size=3),
             nn.BatchNorm1d(256),
             nn.Conv1d(in_channels=256, out_channels=128, kernel_size=3),
@@ -53,7 +55,7 @@ class Conv1dAutoEncoder(pl.LightningModule):
             nn.ConvTranspose1d(in_channels=256, out_channels=512, kernel_size=3),
             nn.BatchNorm1d(512),
             nn.ConvTranspose1d(
-                in_channels=512, out_channels=in_channels, kernel_size=3
+                in_channels=512, out_channels=in_channels + n_embedding, kernel_size=3
             ),
         )
         self.decoder.apply(init_weights)
@@ -67,21 +69,27 @@ class Conv1dAutoEncoder(pl.LightningModule):
         """
         Returns embeddings
         """
-        latent = self.encoder(x)
-        return latent
+        x_without_mcc = x[:, :, 1:]
+        if x_without_mcc.dim() < 3:
+            x_without_mcc = x_without_mcc.unsqueeze(-1)
+        mcc = x[:, :, 0].long()
+        mcc = self.embed(mcc)
+        x_embed = torch.concat((x_without_mcc, mcc), -1)
+        x_embed = x_embed.permute((0, 2, 1))
+
+        latent = self.encoder(x_embed)
+        return x_embed, latent
 
     # TODO разобраться, нужен ли вообще этот метод
     def predict_step(self, x):
-        x = x.permute((0, 2, 1))
-        latent = self(x)
-        loss = torch.nn.MSELoss()(self.decoder(latent), x)
+        x_embed, latent = self(x)
+        loss = torch.nn.MSELoss()(self.decoder(latent), x_embed)
         return {'latent': latent, 'loss': loss}
 
     def training_step(self, batch, batch_idx):
         x = batch
-        x = x.permute((0, 2, 1))
-        latent = self(x)
-        loss = torch.nn.MSELoss()(self.decoder(latent), x)
+        x_embed, latent = self(x)
+        loss = torch.nn.MSELoss()(self.decoder(latent), x_embed)
 
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         return {"loss": loss}
@@ -91,9 +99,8 @@ class Conv1dAutoEncoder(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x = batch
-        x = x.permute((0, 2, 1))
-        latent = self(x)
-        loss = torch.nn.MSELoss()(self.decoder(latent), x)
+        x_embed, latent = self(x)
+        loss = torch.nn.MSELoss()(self.decoder(latent), x_embed)
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         return {"loss": loss}
 
@@ -102,9 +109,8 @@ class Conv1dAutoEncoder(pl.LightningModule):
 
     def test_step(self, batch, batch_idx: int):
         x = batch
-        x = x.permute((0, 2, 1))
-        latent = self(x)
-        loss = torch.nn.MSELoss()(self.decoder(latent), x)
+        x_embed, latent = self(x)
+        loss = torch.nn.MSELoss()(self.decoder(latent), x_embed)
         self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         return {"loss": loss, "latent": latent}
 

@@ -1,7 +1,10 @@
 from typing import Optional
 import os
+import pickle
 
 import pandas as pd
+import numpy as np
+
 import torch
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
@@ -24,6 +27,8 @@ class TransactionDatasetNewData(Dataset):
         self.drop_user_name = drop_user_name
         self.user_name_column = user_name_column
 
+        self.compare = dict(pickle.load(open('src\\datamodules\\compare_table', 'rb')))
+
     def __getitem__(self, index: int) -> T_co:
         sample = pd.read_csv(os.path.join(self.data_dir, f'{index}.csv'))
         if self.drop_time:
@@ -31,9 +36,10 @@ class TransactionDatasetNewData(Dataset):
         if self.drop_user_name:
             sample.drop(columns=self.user_name_column, inplace=True)
         
-        # sample = torch.tensor(sample.values).float()
+        sample = sample.values
+        sample = np.apply_along_axis(lambda x: [self.compare[x[0]], x[1]], 1, sample)
 
-        return torch.tensor(sample.values).float()
+        return torch.tensor(sample).float()
 
     def __len__(self):
         return len(os.listdir(self.data_dir))
@@ -73,7 +79,7 @@ class TransactionDataModuleNewData(LightningDataModule):
                           collate_fn=self._collate_fn)
 
     def val_dataloader(self) -> EVAL_DATALOADERS:
-        return DataLoader(self.train,
+        return DataLoader(self.val,
                           batch_size=self.batch_size,
                           collate_fn=self._collate_fn)
 

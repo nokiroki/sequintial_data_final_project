@@ -14,7 +14,7 @@ def test_lstm_network(train_dataset, test_dataset):
 
 
 def test_cae_network(train_dataset):
-    model = Conv1dAutoEncoder(2, 8)
+    model = Conv1dAutoEncoder(1, 8)
     logger = loggers.TensorBoardLogger('lightning_logs', 'cae')
     trainer = Trainer(gpus=1, max_epochs=20, logger=logger)
     dm = TransactionDataModuleNewData(train_dataset)
