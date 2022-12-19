@@ -1,15 +1,11 @@
 from typing import Any, Optional
 
-import numpy as np
-import pytorch_lightning as pl
 from pytorch_lightning import LightningModule
 import time
 import torch
 from torch import Tensor
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT, EPOCH_OUTPUT
+from pytorch_lightning.utilities.types import STEP_OUTPUT, EPOCH_OUTPUT
 
 
 def init_weights(m):
